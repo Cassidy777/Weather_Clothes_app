@@ -3,6 +3,7 @@ import API from "../lib/axios";
 
 const Recommendations = ({ temperature, isRaining }) => {
   const [recommendations, setRecommendations] = useState([]);
+  const BACKEND_API_URL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
 
   useEffect(() => {
     const fetchRecommendations = async () => {
@@ -32,7 +33,7 @@ const Recommendations = ({ temperature, isRaining }) => {
             <p>{item.waterproof ? "防水性あり" : "防水性なし"}</p>
             {item.image_url && (
               <img
-                src={`http://127.0.0.1:8000/${item.image_url}`}
+                src={`${BACKEND_API_URL}/${item.image_url}`}
                 alt={item.item_type}
                 style={{ maxWidth: "100px", maxHeight: "100px", objectFit: "cover" }}
               />
@@ -43,6 +44,5 @@ const Recommendations = ({ temperature, isRaining }) => {
     </div>
   );
 };
-
 
 export default Recommendations;

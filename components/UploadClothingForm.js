@@ -17,7 +17,7 @@ const UploadClothingForm = () => {
 
     const formData = new FormData();
     formData.append("user_id", 1); // 仮の user_id、ログインしたユーザーIDに変更
-    formData.append("image", image); // `UploadFile`として送信
+    formData.append("image", image); // UploadFileとして送信
     formData.append("warmth_level", warmthLevel);
     formData.append("waterproof", waterproof);
     formData.append("item_type", itemType);
@@ -84,4 +84,3 @@ const UploadClothingForm = () => {
 };
 
 export default UploadClothingForm;
-
