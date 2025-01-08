@@ -1,34 +1,35 @@
 import { useEffect, useState } from "react";
 import axios from "axios";
-import UploadClothingForm from "../components/UploadClothingForm"; // 服装登録フォーム
-import Recommendations from "../components/Recommendations"; // おすすめの服装コンポーネント
+import UploadClothingForm from "../components/UploadClothingForm";
+import Recommendations from "../components/Recommendations";
 
-// 天気APIのエンドポイント
+const BACKEND_API_URL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
 const openMeteoApiBase = "https://api.open-meteo.com/v1/forecast";
 
-// 天気コードを記号にマッピング
 const weatherCodeToSymbol = (code) => {
-  if (code === 0) return "☀"; // 晴れ
-  if (code >= 1 && code <= 3) return "☁"; // 曇り
-  if (code >= 61 && code <= 67) return "☂"; // 雨
-  if (code >= 71 && code <= 77) return "☃"; // 雪
-  return "☁"; // その他は曇り
+  if (code === 0) return "☀";
+  if (code >= 1 && code <= 3) return "☁";
+  if (code >= 61 && code <= 67) return "☂";
+  if (code >= 71 && code <= 77) return "☃";
+  return "☁";
 };
 
 const Dashboard = () => {
-  const [locationList, setLocationList] = useState([]); // 都道府県リスト
-  const [location, setLocation] = useState(null); // 選択された都道府県
-  const [hourlyWeather, setHourlyWeather] = useState([]); // 一時間ごとの天気情報
-  const [dailyWeather, setDailyWeather] = useState([]); // 一週間の天気情報
-  const [selectedDate, setSelectedDate] = useState(""); // ユーザーが選択した日付
+  const [locationList, setLocationList] = useState([]);
+  const [location, setLocation] = useState(null);
+  const [hourlyWeather, setHourlyWeather] = useState([]);
+  const [dailyWeather, setDailyWeather] = useState([]);
+  const [selectedDate, setSelectedDate] = useState("");
+  const [interval, setInterval] = useState(1); // 時間間隔 (1, 3, 6, 12)
+  const [darkMode, setDarkMode] = useState(false); // ダークモードの状態
+  const [showUpload, setShowUpload] = useState(false); // 服装登録画面の表示切り替え
 
-  // 都道府県リストを取得
   useEffect(() => {
     const fetchLocations = async () => {
       try {
-        const response = await axios.get("http://127.0.0.1:8000/locations");
+        const response = await axios.get(`${BACKEND_API_URL}/locations/`);
         setLocationList(response.data);
-        setLocation(response.data[0]); // デフォルトで最初の都道府県を選択
+        setLocation(response.data[0]);
       } catch (error) {
         console.error("Failed to fetch locations:", error);
       }
@@ -37,7 +38,6 @@ const Dashboard = () => {
     fetchLocations();
   }, []);
 
-  // 天気情報を取得
   useEffect(() => {
     if (!location) return;
 
@@ -47,28 +47,25 @@ const Dashboard = () => {
           `${openMeteoApiBase}?latitude=${location.latitude}&longitude=${location.longitude}&timezone=Asia/Tokyo&hourly=weather_code,temperature_2m,precipitation&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum&current_weather=true`
         );
 
-        // 一時間ごとの天気情報
         const hourlyData = res.data.hourly;
         const formattedHourlyData = hourlyData.time.map((time, index) => ({
           datetime: time,
           temperature: hourlyData.temperature_2m[index],
           precipitation: hourlyData.precipitation[index],
-          weatherCode: hourlyData.weather_code[index], // 天気コード
+          weatherCode: hourlyData.weather_code[index],
         }));
         setHourlyWeather(formattedHourlyData);
 
-        // 一週間の天気情報
         const dailyData = res.data.daily;
         const formattedDailyData = dailyData.time.map((date, index) => ({
           date,
           maxTemp: dailyData.temperature_2m_max[index],
           minTemp: dailyData.temperature_2m_min[index],
           precipitation: dailyData.precipitation_sum[index],
-          weatherCode: dailyData.weather_code[index], // 天気コード
+          weatherCode: dailyData.weather_code[index],
         }));
         setDailyWeather(formattedDailyData);
 
-        // 初期値として最初の日付を選択
         setSelectedDate(dailyData.time[0]);
       } catch (error) {
         console.error("Failed to fetch weather:", error);
@@ -78,84 +75,125 @@ const Dashboard = () => {
     fetchWeather();
   }, [location]);
 
-  // ユーザーが選択した日付に基づく天気情報のフィルタリング
   const filteredHourlyWeather = hourlyWeather.filter((weather) =>
     weather.datetime.startsWith(selectedDate)
   );
 
+  const filteredByInterval = filteredHourlyWeather.filter((_, index) => index % interval === 0);
+
+  const recommendationTemperature =
+    filteredHourlyWeather.length > 0 ? filteredHourlyWeather[0].temperature : dailyWeather[0]?.maxTemp;
+
+  const recommendationIsRaining =
+    filteredHourlyWeather.length > 0
+      ? filteredHourlyWeather[0].precipitation > 0
+      : dailyWeather[0]?.precipitation > 0;
+
   return (
-    <div>
-      <h1>ダッシュボード</h1>
-
-      {/* 都道府県の天気 */}
-      <div>
-        <h2>都道府県の天気</h2>
-        <select
-          onChange={(e) =>
-            setLocation(locationList.find((loc) => loc.id === parseInt(e.target.value)))
-          }
-          value={location?.id || ""}
-        >
-          {locationList.map((loc) => (
-            <option key={loc.id} value={loc.id}>
-              {loc.name}
-            </option>
-          ))}
-        </select>
-
-        {/* 一週間の天気 */}
-        <div>
-          <h3>一週間の天気</h3>
-          <select
-            onChange={(e) => setSelectedDate(e.target.value)}
-            value={selectedDate}
+    <div className={`${darkMode ? "dark" : ""}`}>
+      <div className="bg-background dark:bg-gray-900 text-foreground dark:text-white min-h-screen p-6">
+        {/* ヘッダー */}
+        <header className="flex justify-between items-center mb-6">
+          <h1 className="text-2xl font-serif">服装提案アプリ</h1>
+          <button
+            className="p-2 bg-gray-800 text-white rounded-full"
+            onClick={() => setDarkMode(!darkMode)}
           >
-            {dailyWeather.map((day) => (
-              <option key={day.date} value={day.date}>
-                {day.date} - 最高気温: {day.maxTemp}°C, 最低気温: {day.minTemp}°C, 降水量:{" "}
-                {day.precipitation}mm, 天気: {weatherCodeToSymbol(day.weatherCode)}
-              </option>
-            ))}
-          </select>
-        </div>
+            {darkMode ? "☀" : "🌙"}
+          </button>
+        </header>
 
-        {/* 一時間ごとの天気 */}
-        <div>
-          <h3>{selectedDate} の一時間ごとの天気</h3>
-          {filteredHourlyWeather.length > 0 ? (
-            filteredHourlyWeather.map((weather, index) => (
-              <div key={index}>
-                <p>時間: {new Date(weather.datetime).toLocaleTimeString()}</p>
-                <p>気温: {weather.temperature}°C</p>
-                <p>降水量: {weather.precipitation}mm</p>
-                <p>天気: {weatherCodeToSymbol(weather.weatherCode)}</p>
-              </div>
-            ))
-          ) : (
-            <p>天気データを取得中...</p>
-          )}
-        </div>
-      </div>
+        {/* 左上の服装登録ボタン */}
+        <button
+          onClick={() => setShowUpload(!showUpload)}
+          className="mb-6 px-4 py-2 bg-accent text-white rounded-md"
+        >
+          服装登録
+        </button>
 
-      {/* 服装登録フォーム */}
-      <div>
-        <UploadClothingForm />
-      </div>
+        {/* 服装登録画面 */}
+        {showUpload && (
+          <section className="mb-6">
+            <UploadClothingForm />
+          </section>
+        )}
 
-      {/* おすすめの服装 */}
-      <div>
-        <Recommendations
-          temperature={
-            filteredHourlyWeather.length > 0
-              ? filteredHourlyWeather[0].temperature
-              : dailyWeather[0]?.maxTemp // デフォルト値
-          }
-          isRaining={
-            filteredHourlyWeather.length > 0
-              ? filteredHourlyWeather[0].precipitation > 0
-              : dailyWeather[0]?.precipitation > 0 // デフォルト値
-          }
-        />
+        {/* メインエリア */}
+        <main className="grid grid-cols-1 md:grid-cols-8 gap-6">
+          {/* 左カラム: 都道府県、日付、時間間隔選択 */}
+          <div className="md:col-span-2 bg-black/50 dark:bg-gray-800 p-4 rounded-md shadow-lg">
+            <h2 className="text-xl font-serif mb-4">設定</h2>
+            <div className="mb-4">
+              <h3 className="font-serif mb-2">都道府県を選択</h3>
+              <select
+                onChange={(e) =>
+                  setLocation(locationList.find((loc) => loc.id === parseInt(e.target.value)))
+                }
+                value={location?.id || ""}
+                className="w-full p-2 bg-background dark:bg-gray-800 text-foreground dark:text-white border border-foreground rounded-md"
+              >
+                {locationList.map((loc) => (
+                  <option key={loc.id} value={loc.id}>
+                    {loc.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="mb-4">
+              <h3 className="font-serif mb-2">日付を選択</h3>
+              <select
+                onChange={(e) => setSelectedDate(e.target.value)}
+                value={selectedDate}
+                className="w-full p-2 bg-background dark:bg-gray-800 text-foreground dark:text-white border border-foreground rounded-md"
+              >
+                {dailyWeather.map((day) => (
+                  <option key={day.date} value={day.date}>
+                    {day.date} - 最高気温: {day.maxTemp}°C, 最低気温: {day.minTemp}°C
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <h3 className="font-serif mb-2">時間間隔を選択</h3>
+              <select
+                onChange={(e) => setInterval(parseInt(e.target.value))}
+                value={interval}
+                className="w-full p-2 bg-background dark:bg-gray-800 text-foreground dark:text-white border border-foreground rounded-md"
+              >
+                <option value={1}>1時間ごと</option>
+                <option value={3}>3時間ごと</option>
+                <option value={6}>6時間ごと</option>
+                <option value={12}>12時間ごと</option>
+              </select>
+            </div>
+          </div>
+
+          {/* 中央カラム: 天気情報 */}
+          <div className="md:col-span-3 bg-black/50 dark:bg-gray-800 p-6 rounded-md shadow-lg">
+            <h2 className="text-xl font-serif mb-4">{selectedDate} の天気</h2>
+            {filteredByInterval.length > 0 ? (
+              filteredByInterval.map((weather, index) => (
+                <div key={index} className="mb-4">
+                  <p>時間: {new Date(weather.datetime).toLocaleTimeString()}</p>
+                  <p>気温: {weather.temperature}°C</p>
+                  <p>降水量: {weather.precipitation}mm</p>
+                  <p>天気: {weatherCodeToSymbol(weather.weatherCode)}</p>
+                </div>
+              ))
+            ) : (
+              <p>天気データを取得中...</p>
+            )}
+          </div>
+
+          {/* 右カラム: おすすめの服装 */}
+          <div className="md:col-span-3 bg-black/50 dark:bg-gray-800 p-6 rounded-md shadow-lg">
+            <h2 className="text-xl font-serif mb-4">おすすめの服装</h2>
+            <Recommendations
+              temperature={recommendationTemperature}
+              isRaining={recommendationIsRaining}
+            />
+          </div>
+        </main>
       </div>
     </div>
   );
