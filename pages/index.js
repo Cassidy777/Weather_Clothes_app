@@ -29,7 +29,7 @@ const Dashboard = () => {
   useEffect(() => {
     const fetchLocations = async () => {
       try {
-        const response = await axios.get(`${BACKEND_API_URL}/locations`);
+        const response = await axios.get(`${BACKEND_API_URL}/locations/`);
         setLocationList(response.data);
         setLocation(response.data[0]);
       } catch (error) {
